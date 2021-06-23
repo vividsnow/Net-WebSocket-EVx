@@ -19,4 +19,5 @@ on 'test' => sub {
 on 'configure' => sub {
   requires "Alien::Wslay" => "0";
   requires "EV" => "0";
+  requires "Test::TCP" => "0";
 };

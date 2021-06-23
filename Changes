@@ -1,4 +1,13 @@
-- 0.13
+- 0.17
+	support perl 5.8
+
+- 0.16
+	add README
+
+- 0.15
+	Fix deps
+
+- 0.14
 	Add META.yml
 
 - 0.13
