@@ -1,0 +1,90 @@
+name: CI
+on:
+  push:
+    branches: ['*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-debian:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - perl: '5.32'
+          - perl: '5.36'
+          - perl: '5.40'
+    name: Debian - Perl ${{ matrix.perl }}
+    container: perl:${{ matrix.perl }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system deps
+        run: apt-get update && apt-get install -y cmake gcc make pkg-config libssl-dev
+      - name: Install CPAN deps
+        run: cpanm -n Net::SSLeay IO::Socket::SSL Alien::Wslay EV Net::EmptyPort Test::More
+      - name: Build
+        run: perl Makefile.PL && make
+      - name: Test
+        run: make test
+
+  linux-alpine:
+    runs-on: ubuntu-latest
+    name: Alpine
+    container: alpine:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system deps
+        run: apk add --no-cache perl perl-dev perl-app-cpanminus make gcc musl-dev cmake pkgconf wget openssl-dev zlib-dev perl-net-ssleay perl-io-socket-ssl
+      - name: Install CPAN deps
+        run: cpanm -n Alien::Wslay EV Net::EmptyPort Test::More
+      - name: Build
+        run: perl Makefile.PL && make
+      - name: Test
+        run: make test
+
+  freebsd:
+    runs-on: ubuntu-latest
+    name: FreeBSD
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y perl5 p5-App-cpanminus cmake pkgconf gmake autoconf automake libtool p5-EV
+          run: |
+            set -ex
+            cpanm -n Alien::Wslay Net::EmptyPort Test::More
+            perl Makefile.PL
+            gmake
+            gmake test
+
+  macos:
+    runs-on: macos-latest
+    name: macOS
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system deps
+        run: |
+          brew install cpanminus cmake pkg-config openssl@3
+          brew install wslay
+      - name: Install CPAN deps
+        env:
+          OPENSSL_PREFIX: /opt/homebrew/opt/openssl@3
+          PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig
+          LIBRARY_PATH: /opt/homebrew/lib
+          CPATH: /opt/homebrew/include
+          ALIEN_INSTALL_TYPE: system
+        run: |
+          cpanm -n Net::SSLeay IO::Socket::SSL
+          cpanm -n Alien::Wslay EV Net::EmptyPort Test::More
+      - name: Build
+        env:
+          CPATH: /opt/homebrew/include
+          LIBRARY_PATH: /opt/homebrew/lib
+        run: perl Makefile.PL && make
+      - name: Test
+        env:
+          DYLD_LIBRARY_PATH: /opt/homebrew/lib
+        run: make test
