@@ -1,0 +1,15 @@
+CLAUDE.md
+/.pcg/
+/blib/
+/Makefile
+/Makefile.old
+/pm_to_blib
+/MYMETA.*
+/META.yml
+/META.json
+/MANIFEST.bak
+/EVx.c
+/EVx.o
+/EVx.bs
+/Net-WebSocket-EVx-*/
+/*.tar.gz

@@ -1,0 +1,119 @@
+name: CI
+on:
+  push:
+    branches: ['*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-debian:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - perl: '5.32'
+          - perl: '5.36'
+          - perl: '5.40'
+    name: Debian - Perl ${{ matrix.perl }}
+    container: perl:${{ matrix.perl }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system deps
+        run: apt-get update && apt-get install -y cmake gcc make pkg-config
+      - name: Install CPAN deps
+        run: cpanm -n Alien::Wslay EV Net::EmptyPort Test::More
+      - name: Build
+        run: perl Makefile.PL && make
+      - name: Test
+        run: make test
+
+  valgrind:
+    runs-on: ubuntu-latest
+    name: Valgrind
+    container: perl:5.40
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system deps
+        run: apt-get update && apt-get install -y cmake gcc make pkg-config valgrind
+      - name: Install CPAN deps
+        run: cpanm -n Alien::Wslay EV Net::EmptyPort Test::More
+      - name: Build
+        run: perl Makefile.PL && make
+      - name: Test under valgrind
+        run: |
+          set -e
+          status=0
+          for t in t/*.t; do
+            echo "== $t"
+            valgrind --error-exitcode=42 --leak-check=full --errors-for-leak-kinds=definite \
+                     --log-file=vg.log "$(perl -e 'print $^X')" -Mblib "$t" || status=$?
+            grep -E 'definitely lost|ERROR SUMMARY' vg.log || true
+            if grep -q 'Invalid read\|Invalid write\|Invalid free' vg.log; then
+              cat vg.log; status=1
+            fi
+          done
+          exit $status
+
+  linux-alpine:
+    runs-on: ubuntu-latest
+    name: Alpine
+    container: alpine:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system deps
+        # perl-net-ssleay/perl-io-socket-ssl are prereqs of Alien::Wslay; the
+        # prebuilt packages save compiling them against openssl-dev
+        run: apk add --no-cache perl perl-dev perl-app-cpanminus make gcc musl-dev cmake pkgconf wget perl-net-ssleay perl-io-socket-ssl
+      - name: Install CPAN deps
+        run: cpanm -n Alien::Wslay EV Net::EmptyPort Test::More
+      - name: Build
+        run: perl Makefile.PL && make
+      - name: Test
+        run: make test
+
+  freebsd:
+    runs-on: ubuntu-latest
+    name: FreeBSD
+    steps:
+      - uses: actions/checkout@v5
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y perl5 p5-App-cpanminus cmake pkgconf gmake autoconf automake libtool p5-EV
+          run: |
+            set -ex
+            cpanm -n Alien::Wslay Net::EmptyPort Test::More
+            perl Makefile.PL
+            gmake
+            gmake test
+
+  macos:
+    runs-on: macos-latest
+    name: macOS
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system deps
+        run: |
+          brew install cpanminus cmake pkg-config openssl@3
+          brew install wslay
+      - name: Install CPAN deps
+        env:
+          OPENSSL_PREFIX: /opt/homebrew/opt/openssl@3
+          PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig
+          LIBRARY_PATH: /opt/homebrew/lib
+          CPATH: /opt/homebrew/include
+          ALIEN_INSTALL_TYPE: system
+        run: |
+          cpanm -n Net::SSLeay IO::Socket::SSL
+          cpanm -n Alien::Wslay EV Net::EmptyPort Test::More
+      - name: Build
+        env:
+          CPATH: /opt/homebrew/include
+          LIBRARY_PATH: /opt/homebrew/lib
+        run: perl Makefile.PL && make
+      - name: Test
+        env:
+          DYLD_LIBRARY_PATH: /opt/homebrew/lib
+        run: make test
