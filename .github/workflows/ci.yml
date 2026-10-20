@@ -20,7 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install system deps
-        run: apt-get update && apt-get install -y cmake gcc make pkg-config
+        run: |
+          . /etc/os-release
+          if [ "$VERSION_CODENAME" = bullseye ]; then
+            printf '%s\n' \
+              'deb http://archive.debian.org/debian bullseye main' \
+              'deb http://archive.debian.org/debian-security bullseye-security main' \
+              > /etc/apt/sources.list
+            rm -f /etc/apt/sources.list.d/*
+          fi
+          apt-get update -o Acquire::Check-Valid-Until=false
+          apt-get install -y cmake gcc make pkg-config
       - name: Install CPAN deps
         run: cpanm -n Alien::Wslay EV Net::EmptyPort Test::More
       - name: Build
